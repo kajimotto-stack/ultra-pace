@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>ウルトラマラソン ペース管理</title>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --success: #16a34a;
+      --danger: #dc2626;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #1e293b;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 0;
+      line-height: 1.5;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+    h1, h2, h3 { margin-top: 0; }
+    .card {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .import-card { background: #e0f2fe; border: 1px solid #bae6fd; }
+    .input-group { margin-bottom: 12px; }
+    .input-group label {
+      display: block; font-size: 0.9rem; margin-bottom: 4px; font-weight: bold;
+    }
+    input[type="text"], input[type="number"], input[type="datetime-local"], input[type="url"] {
+      width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px;
+      box-sizing: border-box; font-size: 16px; /* iPhoneズーム防止 */
+    }
+    .flex { display: flex; gap: 8px; align-items: center; }
+    .flex-1 { flex: 1; }
+    
+    button {
+      background: var(--primary); color: white; border: none; padding: 12px;
+      border-radius: 6px; font-size: 1rem; font-weight: bold; cursor: pointer;
+      width: 100%; transition: background 0.2s;
+    }
+    button:active { opacity: 0.8; }
+    button.danger { background: var(--danger); }
+    button.success { background: var(--success); }
+    button.secondary { background: #64748b; }
+    
+    #race-screen, #setup-screen, #loading-indicator { display: none; }
+    
+    .clock {
+      font-size: 2.5rem; font-weight: bold; text-align: center;
+      margin: 4px 0; font-variant-numeric: tabular-nums; letter-spacing: 2px;
+    }
+    .stat-row {
+      display: flex; justify-content: space-between; align-items: center;
+      border-bottom: 1px solid #f1f5f9; padding: 12px 0;
+    }
+    .stat-row:last-child { border-bottom: none; }
+    .stat-label { color: #64748b; font-size: 0.9rem; }
+    .stat-value { font-weight: bold; font-size: 1.15rem; }
+    
+    .status-ahead { color: var(--success); font-weight: bold; }
+    .status-behind { color: var(--danger); font-weight: bold; }
+    
+    .mt-4 { margin-top: 16px; } .mb-4 { margin-bottom: 16px; } .text-center { text-align: center; }
+    
+    .aid-row {
+      border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 12px; background: #fafafa;
+    }
+    .aid-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-weight: bold;}
+
+    /* バッジ（補給・水かぶり） */
+    .badge {
+      display: inline-flex; align-items: center; padding: 4px 10px;
+      border-radius: 16px; font-size: 0.85rem; font-weight: bold;
+    }
+    .badge-food { background: #fff7ed; color: #c2410c; border: 1px solid #ffedd5; }
+    .badge-water { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
+
+    /* 下部固定エリア（iPhone用） */
+    .bottom-action {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      padding: 16px; padding-bottom: calc(16px + env(safe-area-inset-bottom));
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 -4px 12px rgba(0,0,0,0.08);
+      z-index: 100;
+    }
+    .btn-large {
+      padding: 20px; font-size: 1.3rem; border-radius: 16px;
+      box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3);
+    }
+    /* ボタンに隠れないよう余白 */
+    #race-content { padding-bottom: 140px; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <!-- 【設定画面】 -->
+  <div id="setup-screen">
+    <h2>大会プラン設定</h2>
+    <div class="card import-card">
+      <h3 style="color: #0369a1; margin-bottom: 8px;">スプレッドシートから読込</h3>
+      <p style="font-size: 0.8rem; color: #0c4a6e; margin-top: 0;">「ウェブに公開（CSV）」したURLを貼り付けてください。</p>
+      <div class="input-group">
+        <input type="url" id="sheet-url" placeholder="https://docs.google.com/spreadsheets/...">
+      </div>
+      <button onclick="loadFromSpreadsheet()" style="background: #0284c7;">↓ シートデータを反映する</button>
+      <div id="loading-indicator" class="text-center mt-4" style="color: #0369a1; font-weight: bold;">読み込み中...</div>
+    </div>
+
+    <div class="card">
+      <div class="input-group">
+        <label>スタート予定日時</label>
+        <input type="datetime-local" id="planned-start">
+      </div>
+    </div>
+    
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <h3>エイド（区間）設定</h3>
+      <span style="font-size: 0.8rem; color: #64748b;">※手動修正も可能</span>
+    </div>
+    <div id="aid-list-container"></div>
+    
+    <button onclick="addAid()" class="secondary mb-4">＋ 次のエイドを手動追加</button>
+    <button onclick="startRace()" class="success" style="padding: 16px; font-size: 1.1rem; margin-bottom: 40px;">レースモードを開始する</button>
+  </div>
+
+  <!-- 【レース画面】 -->
+  <div id="race-screen">
+    <div id="race-content">
+      <div class="card text-center" style="padding: 10px;">
+        <div style="color: #64748b; font-size: 0.9rem;">現在時刻</div>
+        <div class="clock" id="current-clock">--:--:--</div>
+      </div>
+
+      <!-- 次の目的地情報 -->
+      <div class="card" id="next-aid-card">
+        <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+          <h3 style="color: var(--primary); font-size: 1.6rem; margin: 0;" id="next-aid-title">---</h3>
+          <div style="font-size: 1rem; color: #64748b; font-weight: bold;" id="disp-total-dist">累計 -- km</div>
+        </div>
+        
+        <!-- 補給食・水かぶりバッジエリア -->
+        <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;" id="aid-features"></div>
+
+        <hr style="border: 0; border-top: 1px dashed #cbd5e1; margin: 16px 0;">
+
+        <div class="stat-row">
+          <div class="stat-label">区間距離</div>
+          <div class="stat-value" id="disp-section-dist" style="font-size: 1.3rem; color: #0f172a;">-- km</div>
+        </div>
+        <div class="stat-row">
+          <div class="stat-label">目標ペース</div>
+          <div class="stat-value" id="disp-pace">--:-- /km</div>
+        </div>
+      </div>
+
+      <!-- ペース・ゴール予想情報 -->
+      <div class="card" id="prediction-card">
+        <div class="stat-row">
+          <div class="stat-label">予定との差</div>
+          <div class="stat-value" id="disp-delay">--</div>
+        </div>
+        <div class="stat-row">
+          <div class="stat-label">到着予想時刻</div>
+          <div class="stat-value" id="disp-next-arrival" style="font-size: 1.3rem;">--:--</div>
+        </div>
+        <div class="stat-row" style="background: #f0fdf4; padding: 12px; border-radius: 8px; margin-top: 8px;">
+          <div class="stat-label" style="color: #15803d; font-weight:bold;">ゴール予想</div>
+          <div class="stat-value" style="color: #15803d; font-size: 1.5rem;" id="disp-goal-time">--:--</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- アクションボタン（画面下部固定） -->
+    <div class="bottom-action" id="bottom-action-area">
+      <button id="action-btn" class="success btn-large" onclick="recordDeparture()">出発する！</button>
+      <div style="display: flex; gap: 10px; margin-top: 12px;">
+        <button onclick="undoLast()" class="danger flex-1" style="padding: 10px; font-size: 0.9rem;">戻す</button>
+        <button onclick="backToSetup()" class="secondary flex-1" style="padding: 10px; font-size: 0.9rem;">設定へ</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let state = {
+    plannedStart: "", 
+    aids: [],
+    actualTimes: [] // 各エイドを「出発」した時刻が記録される
+  };
+
+  window.onload = () => {
+    const saved = localStorage.getItem('ultra-pace-state-v3');
+    if (saved) {
+      state = JSON.parse(saved);
+    } else {
+      let d = new Date();
+      d.setDate(d.getDate() + 1);
+      d.setHours(6, 0, 0, 0);
+      state.plannedStart = d.toISOString().slice(0, 16);
+      // 初期サンプルデータ
+      state.aids = [
+        { name: "スタート", dist: 0, paceM: 0, paceS: 0, rest: 0, food: "", water: false },
+        { name: "第1エイド", dist: 10.0, paceM: 6, paceS: 0, rest: 5, food: "おにぎり、バナナ", water: false },
+        { name: "ゴール", dist: 20.0, paceM: 6, paceS: 30, rest: 0, food: "", water: false }
+      ];
+    }
+    
+    const savedUrl = localStorage.getItem('ultra-pace-csv-url');
+    if (savedUrl) document.getElementById('sheet-url').value = savedUrl;
+    
+    setInterval(updateClock, 1000);
+    
+    if (state.actualTimes.length > 0) showRaceScreen();
+    else showSetupScreen();
+  };
+
+  function saveData() {
+    localStorage.setItem('ultra-pace-state-v3', JSON.stringify(state));
+    const url = document.getElementById('sheet-url').value;
+    if(url) localStorage.setItem('ultra-pace-csv-url', url);
+  }
+
+  async function loadFromSpreadsheet() {
+    const url = document.getElementById('sheet-url').value.trim();
+    if (!url) { alert("URLを入力してください"); return; }
+    document.getElementById('loading-indicator').style.display = 'block';
+    
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("通信エラー");
+      const text = await response.text();
+      const lines = text.trim().split(/\r\n|\n/);
+      if (lines.length < 2) throw new Error("データが少なすぎます");
+
+      const newAids = [];
+      for (let i = 1; i < lines.length; i++) {
+        if (!lines[i]) continue;
+        const cols = lines[i].split(',');
+        if (cols.length >= 5) {
+          newAids.push({
+            name: cols[0].replace(/['"]/g, ''),
+            dist: parseFloat(cols[1]) || 0,
+            paceM: parseInt(cols[2]) || 0,
+            paceS: parseInt(cols[3]) || 0,
+            rest: parseInt(cols[4]) || 0,
+            food: (cols[5] || '').replace(/['"]/g, '').trim(),
+            water: ((cols[6] || '').replace(/['"]/g, '').trim() !== '') // 何か文字があればtrue
+          });
+        }
+      }
+      if (newAids.length > 0) {
+        state.aids = newAids; saveData(); renderAidSetup();
+        alert(`スプレッドシートから読込完了！`);
+      }
+    } catch(e) {
+      alert("読み込み失敗\n詳細: " + e.message);
+    } finally {
+      document.getElementById('loading-indicator').style.display = 'none';
+    }
+  }
+
+  function formatTimeHHMM(date) {
+    if(!date) return "--:--";
+    const h = date.getHours().toString().padStart(2, '0');
+    const m = date.getMinutes().toString().padStart(2, '0');
+    return `${h}:${m}`;
+  }
+
+  function paceToMs(m, s) { return (Number(m) * 60 + Number(s)) * 1000; }
+
+  // 予定スケジュールの計算
+  function getPlannedSchedule() {
+    let currentMs = new Date(state.plannedStart).getTime();
+    let schedule = [];
+    for(let i = 0; i < state.aids.length; i++) {
+      let aid = state.aids[i];
+      if (i === 0) {
+        schedule.push({ arrival: currentMs, departure: currentMs }); // スタートは同刻
+      } else {
+        let prevAid = state.aids[i-1];
+        let runTime = (aid.dist - prevAid.dist) * paceToMs(aid.paceM, aid.paceS);
+        currentMs += runTime;
+        let arrival = currentMs;
+        currentMs += (aid.rest * 60000);
+        let departure = currentMs;
+        schedule.push({ arrival, departure });
+      }
+    }
+    return schedule;
+  }
+
+  function updateClock() {
+    const now = new Date();
+    const h = now.getHours().toString().padStart(2, '0');
+    const m = now.getMinutes().toString().padStart(2, '0');
+    const s = now.getSeconds().toString().padStart(2, '0');
+    document.getElementById('current-clock').innerText = `${h}:${m}:${s}`;
+  }
+
+  function showSetupScreen() {
+    document.getElementById('setup-screen').style.display = 'block';
+    document.getElementById('race-screen').style.display = 'none';
+    document.getElementById('planned-start').value = state.plannedStart;
+    renderAidSetup();
+  }
+
+  function renderAidSetup() {
+    const container = document.getElementById('aid-list-container');
+    container.innerHTML = '';
+    state.aids.forEach((aid, idx) => {
+      const isStart = idx === 0;
+      let html = `
+        <div class="aid-row">
+          <div class="aid-header">
+            <span>${isStart ? 'スタート地点' : aid.name}</span>
+            ${!isStart ? `<button style="width:auto; padding:4px 8px; background:var(--danger); font-size:0.8rem;" onclick="removeAid(${idx})">削除</button>` : ''}
+          </div>
+          <div class="input-group">
+            <label>名称</label>
+            <input type="text" value="${aid.name}" onchange="updateAid(${idx}, 'name', this.value)" ${isStart?'readonly':''}>
+          </div>
+          <div class="input-group">
+            <label>累計距離 (km)</label>
+            <input type="number" step="0.1" value="${aid.dist}" onchange="updateAid(${idx}, 'dist', this.value)" ${isStart?'readonly':''}>
+          </div>
+      `;
+      if (!isStart) {
+        html += `
+          <div class="input-group">
+            <label>区間の目標ペース (分:秒 /km)</label>
+            <div class="flex">
+              <input type="number" class="flex-1" value="${aid.paceM}" onchange="updateAid(${idx}, 'paceM', this.value)">分
+              <input type="number" class="flex-1" value="${aid.paceS}" onchange="updateAid(${idx}, 'paceS', this.value)">秒
+            </div>
+          </div>
+          <div class="input-group">
+            <label>補給食メモ</label>
+            <input type="text" value="${aid.food || ''}" onchange="updateAid(${idx}, 'food', this.value)" placeholder="例: おにぎり、バナナ">
+          </div>
+          <div class="input-group">
+            <label style="display:flex; align-items:center; gap:8px;">
+              <input type="checkbox" style="width:auto; transform: scale(1.3);" ${aid.water ? 'checked' : ''} onchange="updateAid(${idx}, 'water', this.checked)">
+              水かぶりあり
+            </label>
+          </div>
+        `;
+      }
+      html += `
+          <div class="input-group">
+            <label>${idx === state.aids.length - 1 ? 'ゴール後' : '休憩予定時間 (分)'}</label>
+            <input type="number" value="${aid.rest}" onchange="updateAid(${idx}, 'rest', this.value)">
+          </div>
+        </div>
+      `;
+      container.innerHTML += html;
+    });
+  }
+
+  function addAid() {
+    const last = state.aids[state.aids.length - 1];
+    state.aids.push({ name: `エイド${state.aids.length}`, dist: last.dist + 5, paceM: last.paceM || 6, paceS: last.paceS || 0, rest: 5, food: "", water: false });
+    renderAidSetup();
+  }
+
+  function removeAid(idx) { state.aids.splice(idx, 1); renderAidSetup(); }
+
+  function updateAid(idx, field, value) {
+    if(field === 'name' || field === 'food') state.aids[idx][field] = value;
+    else if(field === 'water') state.aids[idx][field] = value;
+    else state.aids[idx][field] = Number(value);
+  }
+
+  function startRace() {
+    state.plannedStart = document.getElementById('planned-start').value;
+    if(!state.plannedStart) { alert("スタート予定日時を入力してください"); return; }
+    saveData(); showRaceScreen();
+  }
+
+  function showRaceScreen() {
+    document.getElementById('setup-screen').style.display = 'none';
+    document.getElementById('race-screen').style.display = 'block';
+    updateRaceDisplay();
+  }
+
+  function backToSetup() {
+    if(confirm("設定画面に戻りますか？記録は消えません。")) showSetupScreen();
+  }
+
+  // ★「出発」を記録する関数
+  function recordDeparture() {
+    const nextIdx = state.actualTimes.length;
+    if (nextIdx >= state.aids.length) return;
+    state.actualTimes.push(Date.now());
+    saveData(); updateRaceDisplay();
+  }
+
+  function undoLast() {
+    if (state.actualTimes.length === 0) return;
+    if(confirm("直前の記録を取り消しますか？")) {
+      state.actualTimes.pop(); saveData(); updateRaceDisplay();
+    }
+  }
+
+  function updateRaceDisplay() {
+    const nextIdx = state.actualTimes.length; // 0:スタート前, 1:第1エイドへ進行中
+    const btn = document.getElementById('action-btn');
+    const schedule = getPlannedSchedule();
+
+    if (nextIdx >= state.aids.length) { // ゴール済み
+      document.getElementById('next-aid-title').innerText = "🎉 全行程フィニッシュ！";
+      document.getElementById('disp-total-dist').innerText = `累計 ${state.aids[state.aids.length-1].dist} km`;
+      document.getElementById('aid-features').innerHTML = "";
+      document.getElementById('disp-section-dist').innerText = "-- km";
+      document.getElementById('disp-pace').innerText = "--:-- /km";
+      document.getElementById('disp-delay').innerText = "--";
+      document.getElementById('disp-next-arrival').innerText = "--:--";
+      document.getElementById('disp-goal-time').innerText = formatTimeHHMM(new Date(state.actualTimes[state.actualTimes.length-1]));
+      document.getElementById('bottom-action-area').style.display = 'none';
+      return;
+    }
+
+    document.getElementById('bottom-action-area').style.display = 'block';
+    
+    // 【スタート前】
+    if (nextIdx === 0) {
+      document.getElementById('next-aid-title').innerText = "スタート準備";
+      document.getElementById('disp-total-dist').innerText = "累計 0.0 km";
+      document.getElementById('aid-features').innerHTML = "";
+      document.getElementById('disp-section-dist').innerText = "-- km";
+      document.getElementById('disp-pace').innerText = "--:-- /km";
+      document.getElementById('disp-delay').innerText = "--";
+      document.getElementById('disp-next-arrival').innerText = "--:--";
+      document.getElementById('disp-goal-time').innerText = formatTimeHHMM(new Date(schedule[schedule.length-1].arrival));
+      
+      btn.innerText = "▶️ スタートする！";
+      btn.className = "success btn-large";
+      return;
+    }
+
+    // 【レース中】
+    const currentAid = state.aids[nextIdx];
+    const prevAid = state.aids[nextIdx - 1];
+    
+    const sectionDist = currentAid.dist - prevAid.dist;
+    const runTimeMs = sectionDist * paceToMs(currentAid.paceM, currentAid.paceS);
+    
+    // 遅れ計算 (直前の出発時刻 ベース)
+    const lastActualDep = state.actualTimes[nextIdx - 1];
+    const lastPlannedDep = schedule[nextIdx - 1].departure;
+    const diffMs = lastActualDep - lastPlannedDep; 
+    const diffMins = Math.round(diffMs / 60000);
+    
+    let delayText = "予定通り";
+    let prefix = (nextIdx === 1) ? "スタート" : "前回出発が";
+    if (diffMins > 0) delayText = `<span class="status-behind">${prefix} ${diffMins}分 遅れ</span>`;
+    if (diffMins < 0) delayText = `<span class="status-ahead">${prefix} ${Math.abs(diffMins)}分 早い</span>`;
+
+    // 予想時刻 (到着予想 = 前回の出発 + 区間の走行時間)
+    const arrivalExpectedMs = lastActualDep + runTimeMs;
+    const nextArrivalDate = new Date(arrivalExpectedMs);
+    
+    // ゴール予想
+    let goalProjectedMs = lastActualDep;
+    for (let i = nextIdx; i < state.aids.length; i++) {
+      let d = state.aids[i].dist - state.aids[i-1].dist;
+      goalProjectedMs += d * paceToMs(state.aids[i].paceM, state.aids[i].paceS);
+      if (i !== state.aids.length - 1) goalProjectedMs += (state.aids[i].rest * 60000);
+    }
+    const goalDate = new Date(goalProjectedMs);
+
+    // 画面反映
+    document.getElementById('next-aid-title').innerText = currentAid.name;
+    document.getElementById('disp-total-dist').innerText = `累計 ${currentAid.dist.toFixed(1)} km`;
+    
+    // バッジ
+    let badges = '';
+    if (currentAid.food) badges += `<span class="badge badge-food">🍙 ${currentAid.food}</span>`;
+    if (currentAid.water) badges += `<span class="badge badge-water">💧 水かぶり</span>`;
+    document.getElementById('aid-features').innerHTML = badges;
+
+    document.getElementById('disp-section-dist').innerText = `${sectionDist.toFixed(1)} km`;
+    document.getElementById('disp-pace').innerText = `${currentAid.paceM}分${currentAid.paceS.toString().padStart(2, '0')}秒 /km`;
+    document.getElementById('disp-delay').innerHTML = delayText;
+    document.getElementById('disp-next-arrival').innerText = formatTimeHHMM(nextArrivalDate);
+    document.getElementById('disp-goal-time').innerText = formatTimeHHMM(goalDate);
+
+    // ボタンのテキスト切り替え
+    if (nextIdx === state.aids.length - 1) {
+      btn.innerText = `🏁 ゴールに到着！`;
+      btn.className = "primary btn-large";
+    } else {
+      btn.innerText = `▶️ ${currentAid.name} を出発！`;
+      btn.className = "success btn-large";
+    }
+  }
+</script>
+</body>
+</html>
