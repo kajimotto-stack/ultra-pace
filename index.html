@@ -85,8 +85,8 @@
     .aid-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-weight: bold;}
 
     .badge {
-      display: inline-flex; align-items: center; padding: 4px 10px;
-      border-radius: 16px; font-size: 0.85rem; font-weight: bold;
+      display: inline-flex; align-items: center; padding: 6px 12px;
+      border-radius: 16px; font-size: 0.85rem; font-weight: bold; line-height: 1.3;
     }
     .badge-food { background: #fff7ed; color: #c2410c; border: 1px solid #ffedd5; }
     .badge-water { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
@@ -114,7 +114,7 @@
     <h2>大会プラン設定</h2>
     <div class="card import-card">
       <h3 style="color: #0369a1; margin-bottom: 8px;">スプレッドシートから読込</h3>
-      <p style="font-size: 0.8rem; color: #0c4a6e; margin-top: 0;">スプレッドシートの「共有URL」または「ウェブに公開URL」を貼り付けてください。</p>
+      <p style="font-size: 0.8rem; color: #0c4a6e; margin-top: 0;">スプレッドシートの「共有URL」を貼り付けてください。</p>
       <div class="input-group">
         <input type="url" id="sheet-url" placeholder="https://docs.google.com/spreadsheets/d/...">
       </div>
@@ -149,7 +149,7 @@
 
       <div class="card" id="next-aid-card">
         <div style="display: flex; justify-content: space-between; align-items: flex-end;">
-          <h3 style="color: var(--primary); font-size: 1.6rem; margin: 0;" id="next-aid-title">---</h3>
+          <h3 style="color: var(--primary); font-size: 1.5rem; margin: 0;" id="next-aid-title">---</h3>
           <div style="font-size: 1rem; color: #64748b; font-weight: bold;" id="disp-total-dist">累計 -- km</div>
         </div>
         
@@ -183,13 +183,8 @@
       </div>
     </div>
 
-    <div class="bottom-action" id="bottom-action-area">
-      <button id="action-btn" class="success btn-large" onclick="recordDeparture()">出発する！</button>
-      <div style="display: flex; gap: 10px; margin-top: 12px;">
-        <button onclick="undoLast()" class="danger flex-1" style="padding: 10px; font-size: 0.9rem;">戻す</button>
-        <button onclick="backToSetup()" class="secondary flex-1" style="padding: 10px; font-size: 0.9rem;">設定へ</button>
-      </div>
-    </div>
+    <!-- 画面下部固定アクションボタン -->
+    <div class="bottom-action" id="bottom-action-area"></div>
   </div>
 </div>
 
@@ -201,7 +196,7 @@
   };
 
   window.onload = () => {
-    const saved = localStorage.getItem('ultra-pace-state-v4');
+    const saved = localStorage.getItem('ultra-pace-state-v5');
     if (saved) {
       state = JSON.parse(saved);
     } else {
@@ -225,25 +220,71 @@
   };
 
   function saveData() {
-    localStorage.setItem('ultra-pace-state-v4', JSON.stringify(state));
+    localStorage.setItem('ultra-pace-state-v5', JSON.stringify(state));
     const url = document.getElementById('sheet-url').value;
     if(url) localStorage.setItem('ultra-pace-csv-url', url);
   }
 
-  // ★ URLを自動変換するスマート読み込み関数
+  // ★ 改行・クォートに対応した完全版CSVパーサー
+  function parseCSV(text) {
+    let rows = [];
+    let quote = false;
+    let row = [''];
+    for (let c = 0; c < text.length; c++) {
+      let cc = text[c];
+      let nc = text[c+1] || '';
+      if (cc === '"') {
+        if (quote && nc === '"') { row[row.length - 1] += '"'; c++; }
+        else { quote = !quote; }
+      } else if (cc === ',' && !quote) {
+        row.push('');
+      } else if ((cc === '\r' || cc === '\n') && !quote) {
+        if (cc === '\r' && nc === '\n') { c++; }
+        rows.push(row);
+        row = [''];
+      } else {
+        row[row.length - 1] += cc;
+      }
+    }
+    if (row.length > 1 || row[0] !== '') {
+      rows.push(row);
+    }
+
+    if (rows.length < 2) return [];
+
+    const newAids = [];
+    // 1行目はヘッダーなのでスキップ
+    for (let i = 1; i < rows.length; i++) {
+      const cols = rows[i];
+      if (!cols || cols.length < 2) continue;
+      
+      const name = (cols[0] || '').trim();
+      if (!name) continue;
+
+      const dist = parseFloat(cols[1]) || 0;
+      const paceM = parseInt(cols[2]) || 0;
+      const paceS = parseInt(cols[3]) || 0;
+      const rest = parseInt(cols[4]) || 0;
+      const food = (cols[5] || '').trim();
+      const waterVal = (cols[6] || '').trim();
+      const water = (waterVal !== '' && waterVal !== '×' && waterVal !== 'なし');
+
+      newAids.push({ name, dist, paceM, paceS, rest, food, water });
+    }
+    return newAids;
+  }
+
   async function loadFromSpreadsheet() {
     let inputUrl = document.getElementById('sheet-url').value.trim();
     if (!inputUrl) { alert("URLを入力してください"); return; }
     
     document.getElementById('loading-indicator').style.display = 'block';
     
-    // URLの自動変換ロジック
     let fetchUrl = inputUrl;
     if (inputUrl.includes('docs.google.com/spreadsheets')) {
       const match = inputUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
       if (match && match[1]) {
         const sheetId = match[1];
-        // 通常の編集用・共有用URLをCSV出力URLに自動変換
         if (!inputUrl.includes('output=csv')) {
           fetchUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv`;
         }
@@ -261,43 +302,15 @@
         state.aids = newAids; 
         saveData(); 
         renderAidSetup();
-        alert(`スプレッドシートから ${newAids.length} 件のエイド情報を読み込みました！`);
+        alert(`スプレッドシートから全 ${newAids.length} 件のエイド情報を読み込みました！`);
       } else {
-        alert("データの読み込みに失敗しました。1行目がヘッダー（見出し）になっているか確認してください。");
+        alert("データの解析に失敗しました。ファイル形式を確認してください。");
       }
     } catch(e) {
-      alert("読み込み失敗\n\n【対処法】\nスプレッドシートの「共有」設定で「リンクを知っている全員」にアクセス権が変更されているか確認してください。");
+      alert("読み込み失敗\n\n・スプレッドシートの「共有」設定が「リンクを知っている全員」になっているか確認してください。");
     } finally {
       document.getElementById('loading-indicator').style.display = 'none';
     }
-  }
-
-  // ★ CSVパース関数（カンマや囲み文字に対応）
-  function parseCSV(text) {
-    const lines = text.trim().split(/\r\n|\n/);
-    if (lines.length < 2) return [];
-
-    const newAids = [];
-    for (let i = 1; i < lines.length; i++) {
-      if (!lines[i]) continue;
-      
-      // 簡易CSV分割 (クォート考慮)
-      const cols = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || lines[i].split(',');
-      const cleanCols = cols.map(c => c.replace(/^"|"$/g, '').trim());
-
-      if (cleanCols.length >= 2) {
-        newAids.push({
-          name: cleanCols[0] || `エイド${i}`,
-          dist: parseFloat(cleanCols[1]) || 0,
-          paceM: parseInt(cleanCols[2]) || 0,
-          paceS: parseInt(cleanCols[3]) || 0,
-          rest: parseInt(cleanCols[4]) || 0,
-          food: cleanCols[5] || '',
-          water: (cleanCols[6] && cleanCols[6] !== '') ? true : false
-        });
-      }
-    }
-    return newAids;
   }
 
   function formatTimeHHMM(date) {
@@ -426,6 +439,15 @@
     if(confirm("設定画面に戻りますか？記録は消えません。")) showSetupScreen();
   }
 
+  // リセット（最初からスタートし直す）機能
+  function resetRace() {
+    if(confirm("タイム記録をリセットして、もう一度スタートから始めますか？")) {
+      state.actualTimes = [];
+      saveData();
+      updateRaceDisplay();
+    }
+  }
+
   function recordDeparture() {
     const nextIdx = state.actualTimes.length;
     if (nextIdx >= state.aids.length) return;
@@ -442,24 +464,45 @@
 
   function updateRaceDisplay() {
     const nextIdx = state.actualTimes.length;
-    const btn = document.getElementById('action-btn');
+    const actionArea = document.getElementById('bottom-action-area');
     const schedule = getPlannedSchedule();
 
+    // 【ゴール達成時の表示】
     if (nextIdx >= state.aids.length) {
       document.getElementById('next-aid-title').innerText = "🎉 全行程フィニッシュ！";
       document.getElementById('disp-total-dist').innerText = `累計 ${state.aids[state.aids.length-1].dist} km`;
-      document.getElementById('aid-features').innerHTML = "";
+      document.getElementById('aid-features').innerHTML = `<span class="badge badge-food" style="font-size:1rem; padding:8px 16px;">🏆 完走おめでとうございます！</span>`;
       document.getElementById('disp-section-dist').innerText = "-- km";
       document.getElementById('disp-pace').innerText = "--:-- /km";
-      document.getElementById('disp-delay').innerText = "--";
+      document.getElementById('disp-delay').innerText = "完走";
       document.getElementById('disp-next-arrival').innerText = "--:--";
       document.getElementById('disp-goal-time').innerText = formatTimeHHMM(new Date(state.actualTimes[state.actualTimes.length-1]));
-      document.getElementById('bottom-action-area').style.display = 'none';
+      
+      // ゴール後の操作ボタン
+      actionArea.style.display = 'block';
+      actionArea.innerHTML = `
+        <button class="success btn-large" onclick="resetRace()">🔄 リセットして最初から走る</button>
+        <div style="display: flex; gap: 10px; margin-top: 12px;">
+          <button onclick="undoLast()" class="danger flex-1" style="padding: 10px; font-size: 0.9rem;">直前を戻す</button>
+          <button onclick="backToSetup()" class="secondary flex-1" style="padding: 10px; font-size: 0.9rem;">設定画面へ</button>
+        </div>
+      `;
       return;
     }
 
-    document.getElementById('bottom-action-area').style.display = 'block';
+    // レース中の標準下部操作エリアの描画
+    actionArea.style.display = 'block';
+    actionArea.innerHTML = `
+      <button id="action-btn" class="success btn-large" onclick="recordDeparture()"></button>
+      <div style="display: flex; gap: 10px; margin-top: 12px;">
+        <button onclick="undoLast()" class="danger flex-1" style="padding: 10px; font-size: 0.9rem;">戻す</button>
+        <button onclick="backToSetup()" class="secondary flex-1" style="padding: 10px; font-size: 0.9rem;">設定へ</button>
+      </div>
+    `;
+
+    const btn = document.getElementById('action-btn');
     
+    // 【スタート前】
     if (nextIdx === 0) {
       document.getElementById('next-aid-title').innerText = "スタート準備";
       document.getElementById('disp-total-dist').innerText = "累計 0.0 km";
@@ -475,6 +518,7 @@
       return;
     }
 
+    // 【進行中】
     const currentAid = state.aids[nextIdx];
     const prevAid = state.aids[nextIdx - 1];
     
