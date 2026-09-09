@@ -91,19 +91,34 @@
     .badge-food { background: #fff7ed; color: #c2410c; border: 1px solid #ffedd5; }
     .badge-water { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
 
+    /* 下部固定エリア */
     .bottom-action {
       position: fixed; bottom: 0; left: 0; right: 0;
-      padding: 16px; padding-bottom: calc(16px + env(safe-area-inset-bottom));
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(8px);
-      box-shadow: 0 -4px 12px rgba(0,0,0,0.08);
+      padding: 12px 16px; padding-bottom: calc(12px + env(safe-area-inset-bottom));
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 -4px 16px rgba(0,0,0,0.1);
       z-index: 100;
     }
     .btn-large {
-      padding: 20px; font-size: 1.3rem; border-radius: 16px;
+      padding: 18px; font-size: 1.25rem; border-radius: 14px;
       box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3);
     }
-    #race-content { padding-bottom: 140px; }
+    /* 下部バーにコンテンツが被らないように十分な下余白を設ける */
+    #setup-content { padding-bottom: 160px; }
+    #race-content { padding-bottom: 160px; }
+
+    /* 計画画面用フッター集計表示 */
+    .summary-box {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 10px;
+      padding: 8px 12px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
   </style>
 </head>
 <body>
@@ -111,32 +126,48 @@
 <div class="container">
   <!-- 【設定画面】 -->
   <div id="setup-screen">
-    <h2>大会プラン設定</h2>
-    <div class="card import-card">
-      <h3 style="color: #0369a1; margin-bottom: 8px;">スプレッドシートから読込</h3>
-      <p style="font-size: 0.8rem; color: #0c4a6e; margin-top: 0;">スプレッドシートの「共有URL」を貼り付けてください。</p>
-      <div class="input-group">
-        <input type="url" id="sheet-url" placeholder="https://docs.google.com/spreadsheets/d/...">
+    <div id="setup-content">
+      <h2>大会プラン設定</h2>
+      <div class="card import-card">
+        <h3 style="color: #0369a1; margin-bottom: 8px;">スプレッドシートから読込</h3>
+        <p style="font-size: 0.8rem; color: #0c4a6e; margin-top: 0;">スプレッドシートの「共有URL」を貼り付けてください。</p>
+        <div class="input-group">
+          <input type="url" id="sheet-url" placeholder="https://docs.google.com/spreadsheets/d/...">
+        </div>
+        <button onclick="loadFromSpreadsheet()" style="background: #0284c7;">↓ シートデータを反映する</button>
+        <div id="loading-indicator" class="text-center mt-4" style="color: #0369a1; font-weight: bold;">読み込み中...</div>
       </div>
-      <button onclick="loadFromSpreadsheet()" style="background: #0284c7;">↓ シートデータを反映する</button>
-      <div id="loading-indicator" class="text-center mt-4" style="color: #0369a1; font-weight: bold;">読み込み中...</div>
+
+      <div class="card">
+        <div class="input-group">
+          <label>スタート予定日時</label>
+          <input type="datetime-local" id="planned-start" onchange="updateSetupGoalSummary()">
+        </div>
+      </div>
+      
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h3>エイド（区間）設定</h3>
+        <span style="font-size: 0.8rem; color: #64748b;">※手動修正も可能</span>
+      </div>
+      <div id="aid-list-container"></div>
+      
+      <button onclick="addAid()" class="secondary mb-4">＋ 次のエイドを手動追加</button>
     </div>
 
-    <div class="card">
-      <div class="input-group">
-        <label>スタート予定日時</label>
-        <input type="datetime-local" id="planned-start">
+    <!-- 計画画面用 下部固定バー -->
+    <div class="bottom-action">
+      <div class="summary-box">
+        <div>
+          <div style="font-size: 0.75rem; color: #166534; font-weight: bold;">想定完走時間</div>
+          <div id="setup-total-duration" style="font-size: 1.1rem; font-weight: bold; color: #15803d;">--時間--分</div>
+        </div>
+        <div style="text-align: right;">
+          <div style="font-size: 0.75rem; color: #166534; font-weight: bold;">想定ゴール時刻</div>
+          <div id="setup-goal-time" style="font-size: 1.2rem; font-weight: bold; color: #15803d;">--:--</div>
+        </div>
       </div>
+      <button onclick="startRace()" class="success btn-large">▶️ レースモードを開始する</button>
     </div>
-    
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-      <h3>エイド（区間）設定</h3>
-      <span style="font-size: 0.8rem; color: #64748b;">※手動修正も可能</span>
-    </div>
-    <div id="aid-list-container"></div>
-    
-    <button onclick="addAid()" class="secondary mb-4">＋ 次のエイドを手動追加</button>
-    <button onclick="startRace()" class="success" style="padding: 16px; font-size: 1.1rem; margin-bottom: 40px;">レースモードを開始する</button>
   </div>
 
   <!-- 【レース画面】 -->
@@ -176,14 +207,10 @@
           <div class="stat-label">到着予想時刻</div>
           <div class="stat-value" id="disp-next-arrival" style="font-size: 1.3rem;">--:--</div>
         </div>
-        <div class="stat-row" style="background: #f0fdf4; padding: 12px; border-radius: 8px; margin-top: 8px;">
-          <div class="stat-label" style="color: #15803d; font-weight:bold;">ゴール予想</div>
-          <div class="stat-value" style="color: #15803d; font-size: 1.5rem;" id="disp-goal-time">--:--</div>
-        </div>
       </div>
     </div>
 
-    <!-- 画面下部固定アクションボタン -->
+    <!-- レース画面用 下部固定バー -->
     <div class="bottom-action" id="bottom-action-area"></div>
   </div>
 </div>
@@ -196,7 +223,7 @@
   };
 
   window.onload = () => {
-    const saved = localStorage.getItem('ultra-pace-state-v5');
+    const saved = localStorage.getItem('ultra-pace-state-v6');
     if (saved) {
       state = JSON.parse(saved);
     } else {
@@ -205,8 +232,9 @@
       d.setHours(6, 0, 0, 0);
       state.plannedStart = d.toISOString().slice(0, 16);
       state.aids = [
-        { name: "アミティ丹後", dist: 0, paceM: 0, paceS: 0, rest: 0, food: "アミノバイタルⓇPRO", water: true },
-        { name: "網野駅", dist: 1.7, paceM: 5, paceS: 30, rest: 1, food: "飴", water: false }
+        { name: "スタート", dist: 0, paceM: 0, paceS: 0, rest: 0, food: "", water: false },
+        { name: "第1エイド", dist: 10.0, paceM: 6, paceS: 0, rest: 5, food: "おにぎり", water: false },
+        { name: "ゴール", dist: 20.0, paceM: 6, paceS: 30, rest: 0, food: "", water: false }
       ];
     }
     
@@ -220,12 +248,12 @@
   };
 
   function saveData() {
-    localStorage.setItem('ultra-pace-state-v5', JSON.stringify(state));
+    localStorage.setItem('ultra-pace-state-v6', JSON.stringify(state));
     const url = document.getElementById('sheet-url').value;
     if(url) localStorage.setItem('ultra-pace-csv-url', url);
   }
 
-  // ★ 改行・クォートに対応した完全版CSVパーサー
+  // ★ 完全版CSVパーサー
   function parseCSV(text) {
     let rows = [];
     let quote = false;
@@ -253,7 +281,6 @@
     if (rows.length < 2) return [];
 
     const newAids = [];
-    // 1行目はヘッダーなのでスキップ
     for (let i = 1; i < rows.length; i++) {
       const cols = rows[i];
       if (!cols || cols.length < 2) continue;
@@ -322,8 +349,9 @@
 
   function paceToMs(m, s) { return (Number(m) * 60 + Number(s)) * 1000; }
 
+  // 設定に基づく全体計画の計算
   function getPlannedSchedule() {
-    let currentMs = new Date(state.plannedStart).getTime();
+    let currentMs = new Date(state.plannedStart || Date.now()).getTime();
     let schedule = [];
     for(let i = 0; i < state.aids.length; i++) {
       let aid = state.aids[i];
@@ -334,12 +362,40 @@
         let runTime = (aid.dist - prevAid.dist) * paceToMs(aid.paceM, aid.paceS);
         currentMs += runTime;
         let arrival = currentMs;
-        currentMs += (aid.rest * 60000);
+        if (i < state.aids.length - 1) {
+          currentMs += (aid.rest * 60000); // 途中エイドの休憩
+        }
         let departure = currentMs;
         schedule.push({ arrival, departure });
       }
     }
     return schedule;
+  }
+
+  // ★ 計画画面の「ゴール予想時間・完走時間」リアルタイム計算更新
+  function updateSetupGoalSummary() {
+    const startVal = document.getElementById('planned-start').value;
+    if (startVal) state.plannedStart = startVal;
+    
+    if (!state.plannedStart || state.aids.length < 2) {
+      document.getElementById('setup-goal-time').innerText = "--:--";
+      document.getElementById('setup-total-duration').innerText = "--時間--分";
+      return;
+    }
+
+    const schedule = getPlannedSchedule();
+    const startMs = new Date(state.plannedStart).getTime();
+    const goalMs = schedule[schedule.length - 1].arrival;
+    
+    const goalDate = new Date(goalMs);
+    const totalDiffMs = goalMs - startMs;
+    
+    const totalMins = Math.floor(totalDiffMs / 60000);
+    const h = Math.floor(totalMins / 60);
+    const m = totalMins % 60;
+
+    document.getElementById('setup-goal-time').innerText = formatTimeHHMM(goalDate);
+    document.getElementById('setup-total-duration').innerText = `${h}時間${m.toString().padStart(2, '0')}分`;
   }
 
   function updateClock() {
@@ -370,11 +426,11 @@
           </div>
           <div class="input-group">
             <label>名称</label>
-            <input type="text" value="${aid.name}" onchange="updateAid(${idx}, 'name', this.value)" ${isStart?'readonly':''}>
+            <input type="text" value="${aid.name}" oninput="updateAid(${idx}, 'name', this.value)" ${isStart?'readonly':''}>
           </div>
           <div class="input-group">
             <label>累計距離 (km)</label>
-            <input type="number" step="0.1" value="${aid.dist}" onchange="updateAid(${idx}, 'dist', this.value)" ${isStart?'readonly':''}>
+            <input type="number" step="0.1" value="${aid.dist}" oninput="updateAid(${idx}, 'dist', this.value)" ${isStart?'readonly':''}>
           </div>
       `;
       if (!isStart) {
@@ -382,13 +438,13 @@
           <div class="input-group">
             <label>区間の目標ペース (分:秒 /km)</label>
             <div class="flex">
-              <input type="number" class="flex-1" value="${aid.paceM}" onchange="updateAid(${idx}, 'paceM', this.value)">分
-              <input type="number" class="flex-1" value="${aid.paceS}" onchange="updateAid(${idx}, 'paceS', this.value)">秒
+              <input type="number" class="flex-1" value="${aid.paceM}" oninput="updateAid(${idx}, 'paceM', this.value)">分
+              <input type="number" class="flex-1" value="${aid.paceS}" oninput="updateAid(${idx}, 'paceS', this.value)">秒
             </div>
           </div>
           <div class="input-group">
             <label>補給食メモ</label>
-            <input type="text" value="${aid.food || ''}" onchange="updateAid(${idx}, 'food', this.value)">
+            <input type="text" value="${aid.food || ''}" oninput="updateAid(${idx}, 'food', this.value)">
           </div>
           <div class="input-group">
             <label style="display:flex; align-items:center; gap:8px;">
@@ -401,12 +457,15 @@
       html += `
           <div class="input-group">
             <label>${idx === state.aids.length - 1 ? 'ゴール後' : '休憩予定時間 (分)'}</label>
-            <input type="number" value="${aid.rest}" onchange="updateAid(${idx}, 'rest', this.value)">
+            <input type="number" value="${aid.rest}" oninput="updateAid(${idx}, 'rest', this.value)">
           </div>
         </div>
       `;
       container.innerHTML += html;
     });
+
+    // 描画後に集計を反映
+    updateSetupGoalSummary();
   }
 
   function addAid() {
@@ -415,12 +474,19 @@
     renderAidSetup();
   }
 
-  function removeAid(idx) { state.aids.splice(idx, 1); renderAidSetup(); }
+  function removeAid(idx) { 
+    state.aids.splice(idx, 1); 
+    renderAidSetup(); 
+  }
 
+  // ★ 入力変更のたびにリアルタイム再計算
   function updateAid(idx, field, value) {
     if(field === 'name' || field === 'food') state.aids[idx][field] = value;
     else if(field === 'water') state.aids[idx][field] = value;
     else state.aids[idx][field] = Number(value);
+    
+    saveData();
+    updateSetupGoalSummary();
   }
 
   function startRace() {
@@ -439,7 +505,6 @@
     if(confirm("設定画面に戻りますか？記録は消えません。")) showSetupScreen();
   }
 
-  // リセット（最初からスタートし直す）機能
   function resetRace() {
     if(confirm("タイム記録をリセットして、もう一度スタートから始めますか？")) {
       state.actualTimes = [];
@@ -467,7 +532,7 @@
     const actionArea = document.getElementById('bottom-action-area');
     const schedule = getPlannedSchedule();
 
-    // 【ゴール達成時の表示】
+    // 【ゴール達成時】
     if (nextIdx >= state.aids.length) {
       document.getElementById('next-aid-title').innerText = "🎉 全行程フィニッシュ！";
       document.getElementById('disp-total-dist').innerText = `累計 ${state.aids[state.aids.length-1].dist} km`;
@@ -476,13 +541,21 @@
       document.getElementById('disp-pace').innerText = "--:-- /km";
       document.getElementById('disp-delay').innerText = "完走";
       document.getElementById('disp-next-arrival').innerText = "--:--";
-      document.getElementById('disp-goal-time').innerText = formatTimeHHMM(new Date(state.actualTimes[state.actualTimes.length-1]));
       
-      // ゴール後の操作ボタン
       actionArea.style.display = 'block';
       actionArea.innerHTML = `
+        <div class="summary-box">
+          <div>
+            <div style="font-size: 0.75rem; color: #166534; font-weight: bold;">最終ゴール時刻</div>
+            <div style="font-size: 1.2rem; font-weight: bold; color: #15803d;">${formatTimeHHMM(new Date(state.actualTimes[state.actualTimes.length-1]))}</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 0.75rem; color: #166534; font-weight: bold;">ステータス</div>
+            <div style="font-size: 1.1rem; font-weight: bold; color: #15803d;">完走達成！</div>
+          </div>
+        </div>
         <button class="success btn-large" onclick="resetRace()">🔄 リセットして最初から走る</button>
-        <div style="display: flex; gap: 10px; margin-top: 12px;">
+        <div style="display: flex; gap: 10px; margin-top: 10px;">
           <button onclick="undoLast()" class="danger flex-1" style="padding: 10px; font-size: 0.9rem;">直前を戻す</button>
           <button onclick="backToSetup()" class="secondary flex-1" style="padding: 10px; font-size: 0.9rem;">設定画面へ</button>
         </div>
@@ -490,11 +563,35 @@
       return;
     }
 
-    // レース中の標準下部操作エリアの描画
+    // 【レース中・下部固定エリアの構築】
+    let goalDateStr = "--:--";
+    if (nextIdx === 0) {
+      goalDateStr = formatTimeHHMM(new Date(schedule[schedule.length-1].arrival));
+    } else {
+      const lastActualDep = state.actualTimes[nextIdx - 1];
+      let goalProjectedMs = lastActualDep;
+      for (let i = nextIdx; i < state.aids.length; i++) {
+        let d = state.aids[i].dist - state.aids[i-1].dist;
+        goalProjectedMs += d * paceToMs(state.aids[i].paceM, state.aids[i].paceS);
+        if (i !== state.aids.length - 1) goalProjectedMs += (state.aids[i].rest * 60000);
+      }
+      goalDateStr = formatTimeHHMM(new Date(goalProjectedMs));
+    }
+
     actionArea.style.display = 'block';
     actionArea.innerHTML = `
+      <div class="summary-box">
+        <div>
+          <div style="font-size: 0.75rem; color: #166534; font-weight: bold;">リアルタイム ゴール予想</div>
+          <div style="font-size: 1.25rem; font-weight: bold; color: #15803d;">${goalDateStr}</div>
+        </div>
+        <div style="text-align: right;">
+          <div style="font-size: 0.75rem; color: #64748b; font-weight: bold;">残り距離</div>
+          <div style="font-size: 1.1rem; font-weight: bold; color: #0f172a;">${(state.aids[state.aids.length-1].dist - (nextIdx > 0 ? state.aids[nextIdx-1].dist : 0)).toFixed(1)} km</div>
+        </div>
+      </div>
       <button id="action-btn" class="success btn-large" onclick="recordDeparture()"></button>
-      <div style="display: flex; gap: 10px; margin-top: 12px;">
+      <div style="display: flex; gap: 10px; margin-top: 10px;">
         <button onclick="undoLast()" class="danger flex-1" style="padding: 10px; font-size: 0.9rem;">戻す</button>
         <button onclick="backToSetup()" class="secondary flex-1" style="padding: 10px; font-size: 0.9rem;">設定へ</button>
       </div>
@@ -502,7 +599,7 @@
 
     const btn = document.getElementById('action-btn');
     
-    // 【スタート前】
+    // スタート前
     if (nextIdx === 0) {
       document.getElementById('next-aid-title').innerText = "スタート準備";
       document.getElementById('disp-total-dist').innerText = "累計 0.0 km";
@@ -511,14 +608,13 @@
       document.getElementById('disp-pace').innerText = "--:-- /km";
       document.getElementById('disp-delay').innerText = "--";
       document.getElementById('disp-next-arrival').innerText = "--:--";
-      document.getElementById('disp-goal-time').innerText = formatTimeHHMM(new Date(schedule[schedule.length-1].arrival));
       
       btn.innerText = "▶️ スタートする！";
       btn.className = "success btn-large";
       return;
     }
 
-    // 【進行中】
+    // 進行中
     const currentAid = state.aids[nextIdx];
     const prevAid = state.aids[nextIdx - 1];
     
@@ -537,14 +633,6 @@
 
     const arrivalExpectedMs = lastActualDep + runTimeMs;
     const nextArrivalDate = new Date(arrivalExpectedMs);
-    
-    let goalProjectedMs = lastActualDep;
-    for (let i = nextIdx; i < state.aids.length; i++) {
-      let d = state.aids[i].dist - state.aids[i-1].dist;
-      goalProjectedMs += d * paceToMs(state.aids[i].paceM, state.aids[i].paceS);
-      if (i !== state.aids.length - 1) goalProjectedMs += (state.aids[i].rest * 60000);
-    }
-    const goalDate = new Date(goalProjectedMs);
 
     document.getElementById('next-aid-title').innerText = currentAid.name;
     document.getElementById('disp-total-dist').innerText = `累計 ${currentAid.dist.toFixed(1)} km`;
@@ -558,7 +646,6 @@
     document.getElementById('disp-pace').innerText = `${currentAid.paceM}分${currentAid.paceS.toString().padStart(2, '0')}秒 /km`;
     document.getElementById('disp-delay').innerHTML = delayText;
     document.getElementById('disp-next-arrival').innerText = formatTimeHHMM(nextArrivalDate);
-    document.getElementById('disp-goal-time').innerText = formatTimeHHMM(goalDate);
 
     if (nextIdx === state.aids.length - 1) {
       btn.innerText = `🏁 ゴールに到着！`;
