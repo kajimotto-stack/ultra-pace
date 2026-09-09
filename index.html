@@ -45,7 +45,7 @@
     }
     input[type="text"], input[type="number"], input[type="datetime-local"], input[type="url"] {
       width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px;
-      box-sizing: border-box; font-size: 16px; /* iPhoneズーム防止 */
+      box-sizing: border-box; font-size: 16px;
     }
     .flex { display: flex; gap: 8px; align-items: center; }
     .flex-1 { flex: 1; }
@@ -84,7 +84,6 @@
     }
     .aid-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-weight: bold;}
 
-    /* バッジ（補給・水かぶり） */
     .badge {
       display: inline-flex; align-items: center; padding: 4px 10px;
       border-radius: 16px; font-size: 0.85rem; font-weight: bold;
@@ -92,7 +91,6 @@
     .badge-food { background: #fff7ed; color: #c2410c; border: 1px solid #ffedd5; }
     .badge-water { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
 
-    /* 下部固定エリア（iPhone用） */
     .bottom-action {
       position: fixed; bottom: 0; left: 0; right: 0;
       padding: 16px; padding-bottom: calc(16px + env(safe-area-inset-bottom));
@@ -105,7 +103,6 @@
       padding: 20px; font-size: 1.3rem; border-radius: 16px;
       box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3);
     }
-    /* ボタンに隠れないよう余白 */
     #race-content { padding-bottom: 140px; }
   </style>
 </head>
@@ -117,9 +114,9 @@
     <h2>大会プラン設定</h2>
     <div class="card import-card">
       <h3 style="color: #0369a1; margin-bottom: 8px;">スプレッドシートから読込</h3>
-      <p style="font-size: 0.8rem; color: #0c4a6e; margin-top: 0;">「ウェブに公開（CSV）」したURLを貼り付けてください。</p>
+      <p style="font-size: 0.8rem; color: #0c4a6e; margin-top: 0;">スプレッドシートの「共有URL」または「ウェブに公開URL」を貼り付けてください。</p>
       <div class="input-group">
-        <input type="url" id="sheet-url" placeholder="https://docs.google.com/spreadsheets/...">
+        <input type="url" id="sheet-url" placeholder="https://docs.google.com/spreadsheets/d/...">
       </div>
       <button onclick="loadFromSpreadsheet()" style="background: #0284c7;">↓ シートデータを反映する</button>
       <div id="loading-indicator" class="text-center mt-4" style="color: #0369a1; font-weight: bold;">読み込み中...</div>
@@ -150,14 +147,12 @@
         <div class="clock" id="current-clock">--:--:--</div>
       </div>
 
-      <!-- 次の目的地情報 -->
       <div class="card" id="next-aid-card">
         <div style="display: flex; justify-content: space-between; align-items: flex-end;">
           <h3 style="color: var(--primary); font-size: 1.6rem; margin: 0;" id="next-aid-title">---</h3>
           <div style="font-size: 1rem; color: #64748b; font-weight: bold;" id="disp-total-dist">累計 -- km</div>
         </div>
         
-        <!-- 補給食・水かぶりバッジエリア -->
         <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;" id="aid-features"></div>
 
         <hr style="border: 0; border-top: 1px dashed #cbd5e1; margin: 16px 0;">
@@ -172,7 +167,6 @@
         </div>
       </div>
 
-      <!-- ペース・ゴール予想情報 -->
       <div class="card" id="prediction-card">
         <div class="stat-row">
           <div class="stat-label">予定との差</div>
@@ -189,7 +183,6 @@
       </div>
     </div>
 
-    <!-- アクションボタン（画面下部固定） -->
     <div class="bottom-action" id="bottom-action-area">
       <button id="action-btn" class="success btn-large" onclick="recordDeparture()">出発する！</button>
       <div style="display: flex; gap: 10px; margin-top: 12px;">
@@ -204,11 +197,11 @@
   let state = {
     plannedStart: "", 
     aids: [],
-    actualTimes: [] // 各エイドを「出発」した時刻が記録される
+    actualTimes: []
   };
 
   window.onload = () => {
-    const saved = localStorage.getItem('ultra-pace-state-v3');
+    const saved = localStorage.getItem('ultra-pace-state-v4');
     if (saved) {
       state = JSON.parse(saved);
     } else {
@@ -216,11 +209,9 @@
       d.setDate(d.getDate() + 1);
       d.setHours(6, 0, 0, 0);
       state.plannedStart = d.toISOString().slice(0, 16);
-      // 初期サンプルデータ
       state.aids = [
-        { name: "スタート", dist: 0, paceM: 0, paceS: 0, rest: 0, food: "", water: false },
-        { name: "第1エイド", dist: 10.0, paceM: 6, paceS: 0, rest: 5, food: "おにぎり、バナナ", water: false },
-        { name: "ゴール", dist: 20.0, paceM: 6, paceS: 30, rest: 0, food: "", water: false }
+        { name: "アミティ丹後", dist: 0, paceM: 0, paceS: 0, rest: 0, food: "アミノバイタルⓇPRO", water: true },
+        { name: "網野駅", dist: 1.7, paceM: 5, paceS: 30, rest: 1, food: "飴", water: false }
       ];
     }
     
@@ -234,48 +225,79 @@
   };
 
   function saveData() {
-    localStorage.setItem('ultra-pace-state-v3', JSON.stringify(state));
+    localStorage.setItem('ultra-pace-state-v4', JSON.stringify(state));
     const url = document.getElementById('sheet-url').value;
     if(url) localStorage.setItem('ultra-pace-csv-url', url);
   }
 
+  // ★ URLを自動変換するスマート読み込み関数
   async function loadFromSpreadsheet() {
-    const url = document.getElementById('sheet-url').value.trim();
-    if (!url) { alert("URLを入力してください"); return; }
+    let inputUrl = document.getElementById('sheet-url').value.trim();
+    if (!inputUrl) { alert("URLを入力してください"); return; }
+    
     document.getElementById('loading-indicator').style.display = 'block';
     
-    try {
-      const response = await fetch(url);
-      if (!response.ok) throw new Error("通信エラー");
-      const text = await response.text();
-      const lines = text.trim().split(/\r\n|\n/);
-      if (lines.length < 2) throw new Error("データが少なすぎます");
-
-      const newAids = [];
-      for (let i = 1; i < lines.length; i++) {
-        if (!lines[i]) continue;
-        const cols = lines[i].split(',');
-        if (cols.length >= 5) {
-          newAids.push({
-            name: cols[0].replace(/['"]/g, ''),
-            dist: parseFloat(cols[1]) || 0,
-            paceM: parseInt(cols[2]) || 0,
-            paceS: parseInt(cols[3]) || 0,
-            rest: parseInt(cols[4]) || 0,
-            food: (cols[5] || '').replace(/['"]/g, '').trim(),
-            water: ((cols[6] || '').replace(/['"]/g, '').trim() !== '') // 何か文字があればtrue
-          });
+    // URLの自動変換ロジック
+    let fetchUrl = inputUrl;
+    if (inputUrl.includes('docs.google.com/spreadsheets')) {
+      const match = inputUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+      if (match && match[1]) {
+        const sheetId = match[1];
+        // 通常の編集用・共有用URLをCSV出力URLに自動変換
+        if (!inputUrl.includes('output=csv')) {
+          fetchUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv`;
         }
       }
+    }
+
+    try {
+      const response = await fetch(fetchUrl);
+      if (!response.ok) throw new Error("通信エラー");
+      const text = await response.text();
+      
+      const newAids = parseCSV(text);
+      
       if (newAids.length > 0) {
-        state.aids = newAids; saveData(); renderAidSetup();
-        alert(`スプレッドシートから読込完了！`);
+        state.aids = newAids; 
+        saveData(); 
+        renderAidSetup();
+        alert(`スプレッドシートから ${newAids.length} 件のエイド情報を読み込みました！`);
+      } else {
+        alert("データの読み込みに失敗しました。1行目がヘッダー（見出し）になっているか確認してください。");
       }
     } catch(e) {
-      alert("読み込み失敗\n詳細: " + e.message);
+      alert("読み込み失敗\n\n【対処法】\nスプレッドシートの「共有」設定で「リンクを知っている全員」にアクセス権が変更されているか確認してください。");
     } finally {
       document.getElementById('loading-indicator').style.display = 'none';
     }
+  }
+
+  // ★ CSVパース関数（カンマや囲み文字に対応）
+  function parseCSV(text) {
+    const lines = text.trim().split(/\r\n|\n/);
+    if (lines.length < 2) return [];
+
+    const newAids = [];
+    for (let i = 1; i < lines.length; i++) {
+      if (!lines[i]) continue;
+      
+      // 簡易CSV分割 (クォート考慮)
+      const cols = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || lines[i].split(',');
+      const cleanCols = cols.map(c => c.replace(/^"|"$/g, '').trim());
+
+      if (cleanCols.length >= 2) {
+        newAids.push({
+          name: cleanCols[0] || `エイド${i}`,
+          dist: parseFloat(cleanCols[1]) || 0,
+          paceM: parseInt(cleanCols[2]) || 0,
+          paceS: parseInt(cleanCols[3]) || 0,
+          rest: parseInt(cleanCols[4]) || 0,
+          food: cleanCols[5] || '',
+          water: (cleanCols[6] && cleanCols[6] !== '') ? true : false
+        });
+      }
+    }
+    return newAids;
   }
 
   function formatTimeHHMM(date) {
@@ -287,14 +309,13 @@
 
   function paceToMs(m, s) { return (Number(m) * 60 + Number(s)) * 1000; }
 
-  // 予定スケジュールの計算
   function getPlannedSchedule() {
     let currentMs = new Date(state.plannedStart).getTime();
     let schedule = [];
     for(let i = 0; i < state.aids.length; i++) {
       let aid = state.aids[i];
       if (i === 0) {
-        schedule.push({ arrival: currentMs, departure: currentMs }); // スタートは同刻
+        schedule.push({ arrival: currentMs, departure: currentMs });
       } else {
         let prevAid = state.aids[i-1];
         let runTime = (aid.dist - prevAid.dist) * paceToMs(aid.paceM, aid.paceS);
@@ -354,7 +375,7 @@
           </div>
           <div class="input-group">
             <label>補給食メモ</label>
-            <input type="text" value="${aid.food || ''}" onchange="updateAid(${idx}, 'food', this.value)" placeholder="例: おにぎり、バナナ">
+            <input type="text" value="${aid.food || ''}" onchange="updateAid(${idx}, 'food', this.value)">
           </div>
           <div class="input-group">
             <label style="display:flex; align-items:center; gap:8px;">
@@ -405,7 +426,6 @@
     if(confirm("設定画面に戻りますか？記録は消えません。")) showSetupScreen();
   }
 
-  // ★「出発」を記録する関数
   function recordDeparture() {
     const nextIdx = state.actualTimes.length;
     if (nextIdx >= state.aids.length) return;
@@ -421,11 +441,11 @@
   }
 
   function updateRaceDisplay() {
-    const nextIdx = state.actualTimes.length; // 0:スタート前, 1:第1エイドへ進行中
+    const nextIdx = state.actualTimes.length;
     const btn = document.getElementById('action-btn');
     const schedule = getPlannedSchedule();
 
-    if (nextIdx >= state.aids.length) { // ゴール済み
+    if (nextIdx >= state.aids.length) {
       document.getElementById('next-aid-title').innerText = "🎉 全行程フィニッシュ！";
       document.getElementById('disp-total-dist').innerText = `累計 ${state.aids[state.aids.length-1].dist} km`;
       document.getElementById('aid-features').innerHTML = "";
@@ -440,7 +460,6 @@
 
     document.getElementById('bottom-action-area').style.display = 'block';
     
-    // 【スタート前】
     if (nextIdx === 0) {
       document.getElementById('next-aid-title').innerText = "スタート準備";
       document.getElementById('disp-total-dist').innerText = "累計 0.0 km";
@@ -456,14 +475,12 @@
       return;
     }
 
-    // 【レース中】
     const currentAid = state.aids[nextIdx];
     const prevAid = state.aids[nextIdx - 1];
     
     const sectionDist = currentAid.dist - prevAid.dist;
     const runTimeMs = sectionDist * paceToMs(currentAid.paceM, currentAid.paceS);
     
-    // 遅れ計算 (直前の出発時刻 ベース)
     const lastActualDep = state.actualTimes[nextIdx - 1];
     const lastPlannedDep = schedule[nextIdx - 1].departure;
     const diffMs = lastActualDep - lastPlannedDep; 
@@ -474,11 +491,9 @@
     if (diffMins > 0) delayText = `<span class="status-behind">${prefix} ${diffMins}分 遅れ</span>`;
     if (diffMins < 0) delayText = `<span class="status-ahead">${prefix} ${Math.abs(diffMins)}分 早い</span>`;
 
-    // 予想時刻 (到着予想 = 前回の出発 + 区間の走行時間)
     const arrivalExpectedMs = lastActualDep + runTimeMs;
     const nextArrivalDate = new Date(arrivalExpectedMs);
     
-    // ゴール予想
     let goalProjectedMs = lastActualDep;
     for (let i = nextIdx; i < state.aids.length; i++) {
       let d = state.aids[i].dist - state.aids[i-1].dist;
@@ -487,11 +502,9 @@
     }
     const goalDate = new Date(goalProjectedMs);
 
-    // 画面反映
     document.getElementById('next-aid-title').innerText = currentAid.name;
     document.getElementById('disp-total-dist').innerText = `累計 ${currentAid.dist.toFixed(1)} km`;
     
-    // バッジ
     let badges = '';
     if (currentAid.food) badges += `<span class="badge badge-food">🍙 ${currentAid.food}</span>`;
     if (currentAid.water) badges += `<span class="badge badge-water">💧 水かぶり</span>`;
@@ -503,7 +516,6 @@
     document.getElementById('disp-next-arrival').innerText = formatTimeHHMM(nextArrivalDate);
     document.getElementById('disp-goal-time').innerText = formatTimeHHMM(goalDate);
 
-    // ボタンのテキスト切り替え
     if (nextIdx === state.aids.length - 1) {
       btn.innerText = `🏁 ゴールに到着！`;
       btn.className = "primary btn-large";
