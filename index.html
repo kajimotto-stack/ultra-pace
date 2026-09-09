@@ -25,17 +25,19 @@
       -webkit-overflow-scrolling: touch;
       padding-bottom: env(safe-area-inset-bottom);
     }
+    /* 1080x1986px 表示領域の最適化 */
     .container {
-      max-width: 600px;
+      max-width: 540px;
       margin: 0 auto;
       padding: 12px;
+      box-sizing: border-box;
     }
     h1, h2, h3 { margin-top: 0; }
     .card {
       background: var(--card);
       border-radius: 12px;
       padding: 12px 14px;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
       box-shadow: 0 2px 6px rgba(0,0,0,0.04);
     }
     .import-card { background: #e0f2fe; border: 1px solid #bae6fd; }
@@ -85,7 +87,7 @@
     
     #race-screen, #setup-screen, #loading-indicator { display: none; }
     
-    /* コンパクト化された時計 */
+    /* 時計表記 */
     .clock-sm {
       font-size: 1.35rem; font-weight: bold; text-align: center;
       margin: 0; font-variant-numeric: tabular-nums; letter-spacing: 1px; color: #334155;
@@ -119,6 +121,8 @@
       backdrop-filter: blur(10px);
       box-shadow: 0 -4px 16px rgba(0,0,0,0.08);
       z-index: 100;
+      max-width: 540px;
+      margin: 0 auto;
     }
     .btn-large {
       padding: 16px; font-size: 1.2rem; border-radius: 14px;
@@ -138,10 +142,10 @@
       align-items: center;
     }
 
-    /* グラフCanvasスタイル */
+    /* 1080x1986pxに最適化したCanvasグラフ */
     #pace-chart {
       width: 100%;
-      height: 160px;
+      height: 175px;
       display: block;
     }
   </style>
@@ -198,7 +202,7 @@
   <!-- 【レース画面】 -->
   <div id="race-screen">
     <div id="race-content">
-      <!-- 1. コンパクトな現在時刻ヘッダー -->
+      <!-- 1. 現在時刻ヘッダー -->
       <div class="card text-center" style="padding: 6px 12px; margin-bottom: 8px;">
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <span style="color: #64748b; font-size: 0.8rem; font-weight: bold;">現在時刻</span>
@@ -264,7 +268,7 @@
   };
 
   window.onload = () => {
-    const saved = localStorage.getItem('ultra-pace-state-v7');
+    const saved = localStorage.getItem('ultra-pace-state-v8');
     if (saved) {
       state = JSON.parse(saved);
     } else {
@@ -289,12 +293,12 @@
   };
 
   function saveData() {
-    localStorage.setItem('ultra-pace-state-v7', JSON.stringify(state));
+    localStorage.setItem('ultra-pace-state-v8', JSON.stringify(state));
     const url = document.getElementById('sheet-url').value;
     if(url) localStorage.setItem('ultra-pace-csv-url', url);
   }
 
-  // ★ 改行・クォート対応CSVパーサー
+  // 完全版CSVパーサー
   function parseCSV(text) {
     let rows = [];
     let quote = false;
@@ -564,13 +568,12 @@
     }
   }
 
-  // ★ Canvas 計画 vs 実績 折れ線グラフ描画関数
+  // Canvas 計画 vs 実績 折れ線グラフ描画関数
   function drawChart() {
     const canvas = document.getElementById('pace-chart');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     
-    // Retinaディスプレイ対応
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
     canvas.width = rect.width * dpr;
@@ -589,7 +592,6 @@
     const lastAid = state.aids[state.aids.length - 1];
     const maxDist = lastAid.dist || 1;
 
-    // 計画の全所要時間 (ms)
     const plannedTotalMs = schedule[schedule.length - 1].arrival - startMs;
     
     let maxTimeMs = plannedTotalMs;
@@ -618,7 +620,6 @@
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
 
-    // Y軸（時間）目盛り
     const steps = 3;
     for (let i = 0; i <= steps; i++) {
       const ratio = i / steps;
@@ -636,7 +637,6 @@
       ctx.fillText(label, padding.left - 4, y);
     }
 
-    // X軸（距離）目盛り
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
     const xSteps = 4;
@@ -683,7 +683,6 @@
       });
       ctx.stroke();
 
-      // 実績プロット点
       state.actualTimes.forEach((timeMs, idx) => {
         const aid = state.aids[idx];
         const elapsedMs = timeMs - startActualMs;
@@ -802,10 +801,10 @@
     const diffMs = lastActualDep - lastPlannedDep; 
     const diffMins = Math.round(diffMs / 60000);
     
+    // ★ 「前回出発が」を削除し、「5分 遅れ」「3分 早い」形式に変更
     let delayText = "予定通り";
-    let prefix = (nextIdx === 1) ? "スタート" : "前回出発が";
-    if (diffMins > 0) delayText = `<span class="status-behind">${prefix} ${diffMins}分 遅れ</span>`;
-    if (diffMins < 0) delayText = `<span class="status-ahead">${prefix} ${Math.abs(diffMins)}分 早い</span>`;
+    if (diffMins > 0) delayText = `<span class="status-behind">${diffMins}分 遅れ</span>`;
+    if (diffMins < 0) delayText = `<span class="status-ahead">${Math.abs(diffMins)}分 早い</span>`;
 
     const arrivalExpectedMs = lastActualDep + runTimeMs;
     const nextArrivalDate = new Date(arrivalExpectedMs);
@@ -831,11 +830,9 @@
       btn.className = "success btn-large";
     }
 
-    // グラフ描画
     drawChart();
   }
 
-  // リサイズ時にもグラフを正しく再描画
   window.onresize = () => {
     if (document.getElementById('race-screen').style.display === 'block') {
       drawChart();
