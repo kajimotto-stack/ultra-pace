@@ -21,11 +21,13 @@
       color: var(--text);
       margin: 0;
       padding: 0;
+      /* ノッチ被りを完全に防ぐ上部150pxのスペーシング */
+      padding-top: calc(150px + env(safe-area-inset-top, 0px));
       line-height: 1.4;
       -webkit-overflow-scrolling: touch;
       padding-bottom: env(safe-area-inset-bottom);
     }
-    /* 1080x1986px 表示領域の最適化 */
+    /* 1080x2136px 表示領域の最適化 */
     .container {
       max-width: 540px;
       margin: 0 auto;
@@ -142,7 +144,7 @@
       align-items: center;
     }
 
-    /* 1080x1986pxに最適化したCanvasグラフ */
+    /* 1080x2136pxに最適化したCanvasグラフ */
     #pace-chart {
       width: 100%;
       height: 175px;
@@ -268,7 +270,7 @@
   };
 
   window.onload = () => {
-    const saved = localStorage.getItem('ultra-pace-state-v8');
+    const saved = localStorage.getItem('ultra-pace-state-v9');
     if (saved) {
       state = JSON.parse(saved);
     } else {
@@ -293,7 +295,7 @@
   };
 
   function saveData() {
-    localStorage.setItem('ultra-pace-state-v8', JSON.stringify(state));
+    localStorage.setItem('ultra-pace-state-v9', JSON.stringify(state));
     const url = document.getElementById('sheet-url').value;
     if(url) localStorage.setItem('ultra-pace-csv-url', url);
   }
@@ -801,7 +803,6 @@
     const diffMs = lastActualDep - lastPlannedDep; 
     const diffMins = Math.round(diffMs / 60000);
     
-    // ★ 「前回出発が」を削除し、「5分 遅れ」「3分 早い」形式に変更
     let delayText = "予定通り";
     if (diffMins > 0) delayText = `<span class="status-behind">${diffMins}分 遅れ</span>`;
     if (diffMins < 0) delayText = `<span class="status-ahead">${Math.abs(diffMins)}分 早い</span>`;
